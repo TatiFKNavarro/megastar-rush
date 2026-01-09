@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <title>Megastar Rush</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        height: 100%;
+        overflow: hidden;
+      }
+
+      body {
+        background: #1a1a1a;
+        font-family: "Arial Black", Arial, sans-serif;
+        touch-action: manipulation;
+      }
+
+      #gameContainer {
+        text-align: center;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 10px;
+        padding-top: env(safe-area-inset-top, 10px);
+      }
+
+      #canvasWrapper {
+        position: relative;
+        width: calc(100% - 10px);
+        max-width: 800px;
+        flex-shrink: 0;
+      }
+
+      canvas {
+        border: 4px solid #ffd700;
+        background: #2a2a2a;
+        display: block;
+        width: 100%;
+        max-width: 100%;
+        height: auto;
+      }
+
+      #gameOver {
+        display: none;
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0, 0, 0, 0.95);
+        padding: 15px;
+        border: 3px solid #ffd700;
+        border-radius: 10px;
+        text-align: center;
+        width: 85%;
+        max-width: 300px;
+        z-index: 100;
+      }
+
+      #gameOver.show {
+        display: block;
+      }
+
+      #gameOver h1 {
+        color: #ffd700;
+        font-size: clamp(20px, 6vw, 36px);
+        margin-bottom: 10px;
+        text-shadow: 2px 2px 0px #ff0000;
+      }
+
+      #gameOver p {
+        color: #fff;
+        font-size: clamp(14px, 4vw, 20px);
+        margin-bottom: 15px;
+      }
+
+      .btn {
+        background: #ffd700;
+        color: #000;
+        border: none;
+        padding: 10px 25px;
+        font-size: clamp(14px, 4vw, 20px);
+        font-weight: bold;
+        cursor: pointer;
+        border-radius: 5px;
+        transition: all 0.3s;
+        touch-action: manipulation;
+      }
+
+      .btn:hover {
+        background: #ffa500;
+        transform: scale(1.1);
+      }
+
+      .btn:active {
+        background: #ffa500;
+        transform: scale(0.95);
+      }
+
+      #instructions {
+        color: #ffd700;
+        margin-top: 10px;
+        font-size: clamp(12px, 4vw, 18px);
+        padding: 0 10px;
+        flex-shrink: 0;
+      }
+
+      #jumpButton {
+        display: none;
+        position: fixed;
+        bottom: -20px;
+        right: 20px;
+        width: 90px;
+        height: 90px;
+        border-radius: 50%;
+        background: linear-gradient(145deg, #ffd700, #ffa500);
+        border: 4px solid #fff;
+        color: #000;
+        font-size: 16px;
+        font-weight: bold;
+        cursor: pointer;
+        touch-action: manipulation;
+        z-index: 50;
+        box-shadow: 0 4px 15px rgba(255, 215, 0, 0.4);
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      #jumpButton:active {
+        transform: scale(0.9);
+        box-shadow: 0 2px 8px rgba(255, 215, 0, 0.4);
+      }
+
+      #jumpButton.visible {
+        display: block;
+      }
+
+      @media (max-width: 600px) {
+        #gameContainer {
+          padding: 5px;
+          padding-top: env(safe-area-inset-top, 5px);
+        }
+
+        canvas {
+          border-width: 2px;
+        }
+
+        #gameOver {
+          padding: 15px;
+          border-width: 2px;
+        }
+
+        #jumpButton {
+          width: 80px;
+          height: 80px;
+          font-size: 14px;
+          bottom: 15px;
+          right: 15px;
+        }
+      }
+
+      @media (orientation: landscape) and (max-height: 500px) {
+        #canvasWrapper {
+          max-width: 80%;
+          max-height: 95%;
+        }
+
+        canvas {
+          max-height: 90vh;
+          width: auto;
+          height: auto;
+        }
+
+        #instructions {
+          display: none;
+        }
+
+        #jumpButton {
+          width: 70px;
+          height: 70px;
+          bottom: 10px;
+          right: 10px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="gameContainer">
+      <div id="canvasWrapper">
+        <canvas id="gameCanvas" width="800" height="400"></canvas>
+        <div id="gameOver">
+          <h1>GAME OVER</h1>
+          <p>Final Score: <span id="finalScore">0</span></p>
+          <button id="restartBtn" class="btn">RESTART</button>
+        </div>
+      </div>
+      <div id="instructions">Press SPACEBAR to jump! Avoid the Dummies!</div>
+      <button id="jumpButton">JUMP</button>
+    </div>
+
+    <script>
+      // ===== CONFIGURATION =====
+      const CONFIG = {
+        canvas: {
+          width: 800,
+          height: 400,
+        },
+        colors: {
+          background: "#2a2a2a",
+          ground: "#444",
+          player: "#FFD700",
+          playerBorder: "#FFA500",
+          obstacle: "#FF0000",
+          obstacleBorder: "#8B0000",
+          text: "#FFD700",
+          textStroke: "#000",
+        },
+        player: {
+          x: 100,
+          width: 80,
+          height: 80,
+          gravity: 0.8,
+          jumpPower: -15,
+          animationSpeed: 8,
+        },
+        obstacle: {
+          width: 30,
+          height: 30,
+          speed: 5,
+          initialSpawnInterval: 120,
+          minSpawnInterval: 60,
+          spawnIntervalDecrement: 0.5,
+        },
+        ground: {
+          height: 40,
+        },
+        score: {
+          updateInterval: 1000,
+        },
+        text: {
+          yeahDuration: 30,
+        },
+        sprites: {
+          paths: [
+            "Subject.png",
+            "Subject_1.png",
+            // 'Subject_2.png',
+            // 'Subject_3.png',
+            // 'Subject_4.png'
+          ],
+        },
+      };
+
+      // ===== SPRITE LOADER =====
+      class SpriteLoader {
+        constructor(spritePaths) {
+          this.sprites = [];
+          this.loaded = false;
+          this.loadPromises = [];
+
+          spritePaths.forEach((path) => {
+            const img = new Image();
+            const promise = new Promise((resolve, reject) => {
+              img.onload = () => resolve(img);
+              img.onerror = () => reject(new Error(`Failed to load ${path}`));
+            });
+            img.src = path;
+            this.sprites.push(img);
+            this.loadPromises.push(promise);
+          });
+        }
+
+        async waitForLoad() {
+          await Promise.all(this.loadPromises);
+          this.loaded = true;
+        }
+
+        getSprites() {
+          return this.sprites;
+        }
+
+        isLoaded() {
+          return this.loaded;
+        }
+      }
+
+      // ===== GAME CLASSES =====
+      class Player {
+        constructor(config, sprites) {
+          this.x = config.x;
+          this.width = config.width;
+          this.height = config.height;
+          this.gravity = config.gravity;
+          this.jumpPower = config.jumpPower;
+          this.animationSpeed = config.animationSpeed;
+          this.sprites = sprites;
+          this.groundY = CONFIG.canvas.height - CONFIG.ground.height;
+          this.currentFrame = 0;
+          this.frameCounter = 0;
+          this.reset();
+        }
+
+        reset() {
+          this.y = this.groundY - this.height;
+          this.velocityY = 0;
+          this.isJumping = false;
+          this.onGround = true;
+          this.showYeah = false;
+          this.yeahTimer = 0;
+          this.currentFrame = 0;
+          this.frameCounter = 0;
+        }
+
+        jump() {
+          if (this.onGround) {
+            this.velocityY = this.jumpPower;
+            this.isJumping = true;
+            this.onGround = false;
+            this.showYeah = true;
+            this.yeahTimer = CONFIG.text.yeahDuration;
+          }
+        }
+
+        update() {
+          this.velocityY += this.gravity;
+          this.y += this.velocityY;
+
+          if (this.y >= this.groundY - this.height) {
+            this.y = this.groundY - this.height;
+            this.velocityY = 0;
+            this.isJumping = false;
+            this.onGround = true;
+          }
+
+          if (this.yeahTimer > 0) {
+            this.yeahTimer--;
+            if (this.yeahTimer === 0) {
+              this.showYeah = false;
+            }
+          }
+
+          this.updateAnimation();
+        }
+
+        updateAnimation() {
+          this.frameCounter++;
+          if (this.frameCounter >= this.animationSpeed) {
+            this.frameCounter = 0;
+            this.currentFrame = (this.currentFrame + 1) % this.sprites.length;
+          }
+        }
+
+        getCurrentSprite() {
+          return this.sprites[this.currentFrame];
+        }
+
+        getBounds() {
+          return {
+            x: this.x,
+            y: this.y,
+            width: this.width,
+            height: this.height,
+          };
+        }
+      }
+
+      class Obstacle {
+        constructor(x, y, config) {
+          this.x = x;
+          this.y = y;
+          this.width = config.width;
+          this.height = config.height;
+          this.speed = config.speed;
+        }
+
+        update() {
+          this.x -= this.speed;
+        }
+
+        isOffScreen() {
+          return this.x + this.width < 0;
+        }
+
+        getBounds() {
+          return {
+            x: this.x,
+            y: this.y,
+            width: this.width,
+            height: this.height,
+          };
+        }
+      }
+
+      class ObstacleManager {
+        constructor(config) {
+          this.config = config;
+          this.obstacles = [];
+          this.timer = 0;
+          this.spawnInterval = config.initialSpawnInterval;
+          this.groundY = CONFIG.canvas.height - CONFIG.ground.height;
+        }
+
+        reset() {
+          this.obstacles = [];
+          this.timer = 0;
+          this.spawnInterval = this.config.initialSpawnInterval;
+        }
+
+        update() {
+          this.timer++;
+          if (this.timer >= this.spawnInterval) {
+            this.spawn();
+            this.timer = 0;
+            this.increaseDifficulty();
+          }
+
+          for (let i = this.obstacles.length - 1; i >= 0; i--) {
+            this.obstacles[i].update();
+            if (this.obstacles[i].isOffScreen()) {
+              this.obstacles.splice(i, 1);
+            }
+          }
+        }
+
+        spawn() {
+          const obstacle = new Obstacle(
+            CONFIG.canvas.width,
+            this.groundY - this.config.height,
+            this.config
+          );
+          this.obstacles.push(obstacle);
+        }
+
+        increaseDifficulty() {
+          if (this.spawnInterval > this.config.minSpawnInterval) {
+            this.spawnInterval -= this.config.spawnIntervalDecrement;
+          }
+        }
+
+        getObstacles() {
+          return this.obstacles;
+        }
+      }
+
+      class ScoreManager {
+        constructor(updateInterval) {
+          this.score = 0;
+          this.updateInterval = updateInterval;
+          this.lastUpdate = 0;
+        }
+
+        reset() {
+          this.score = 0;
+          this.lastUpdate = Date.now();
+        }
+
+        update() {
+          const now = Date.now();
+          if (now - this.lastUpdate >= this.updateInterval) {
+            this.score++;
+            this.lastUpdate = now;
+          }
+        }
+
+        getScore() {
+          return this.score;
+        }
+      }
+
+      class CollisionDetector {
+        static checkCollision(rect1, rect2) {
+          return (
+            rect1.x < rect2.x + rect2.width &&
+            rect1.x + rect1.width > rect2.x &&
+            rect1.y < rect2.y + rect2.height &&
+            rect1.y + rect1.height > rect2.y
+          );
+        }
+
+        static checkPlayerObstacleCollision(player, obstacles) {
+          const playerBounds = player.getBounds();
+          for (let obstacle of obstacles) {
+            if (this.checkCollision(playerBounds, obstacle.getBounds())) {
+              return true;
+            }
+          }
+          return false;
+        }
+      }
+
+      class Renderer {
+        constructor(ctx, config) {
+          this.ctx = ctx;
+          this.config = config;
+          this.groundY = config.canvas.height - config.ground.height;
+        }
+
+        clear() {
+          this.ctx.fillStyle = this.config.colors.background;
+          this.ctx.fillRect(
+            0,
+            0,
+            this.config.canvas.width,
+            this.config.canvas.height
+          );
+        }
+
+        drawGround() {
+          this.ctx.fillStyle = this.config.colors.ground;
+          this.ctx.fillRect(
+            0,
+            this.groundY,
+            this.config.canvas.width,
+            this.config.canvas.height - this.groundY
+          );
+
+          this.ctx.strokeStyle = this.config.colors.text;
+          this.ctx.lineWidth = 3;
+          this.ctx.beginPath();
+          this.ctx.moveTo(0, this.groundY);
+          this.ctx.lineTo(this.config.canvas.width, this.groundY);
+          this.ctx.stroke();
+        }
+
+        drawPlayer(player) {
+          const sprite = player.getCurrentSprite();
+          if (sprite && sprite.complete) {
+            this.ctx.drawImage(
+              sprite,
+              player.x,
+              player.y,
+              player.width,
+              player.height
+            );
+          } else {
+            this.ctx.fillStyle = this.config.colors.player;
+            this.ctx.fillRect(player.x, player.y, player.width, player.height);
+            this.ctx.strokeStyle = this.config.colors.playerBorder;
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeRect(
+              player.x,
+              player.y,
+              player.width,
+              player.height
+            );
+          }
+
+          if (player.showYeah) {
+            this.drawYeahText(player);
+          }
+        }
+
+        drawYeahText(player) {
+          this.ctx.save();
+          this.ctx.font = "bold 24px Arial";
+          this.ctx.fillStyle = this.config.colors.text;
+          this.ctx.strokeStyle = this.config.colors.textStroke;
+          this.ctx.lineWidth = 3;
+          const text = "YEAH!";
+          const textWidth = this.ctx.measureText(text).width;
+          const textX = player.x + player.width / 2 - textWidth / 2;
+          const textY = player.y - 15;
+          this.ctx.strokeText(text, textX, textY);
+          this.ctx.fillText(text, textX, textY);
+          this.ctx.restore();
+        }
+
+        drawObstacles(obstacles) {
+          this.ctx.fillStyle = this.config.colors.obstacle;
+          for (let obstacle of obstacles) {
+            this.ctx.fillRect(
+              obstacle.x,
+              obstacle.y,
+              obstacle.width,
+              obstacle.height
+            );
+            this.ctx.strokeStyle = this.config.colors.obstacleBorder;
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeRect(
+              obstacle.x,
+              obstacle.y,
+              obstacle.width,
+              obstacle.height
+            );
+          }
+        }
+
+        drawScore(score) {
+          this.ctx.save();
+          this.ctx.font = "bold 32px Arial";
+          this.ctx.fillStyle = this.config.colors.text;
+          this.ctx.strokeStyle = this.config.colors.textStroke;
+          this.ctx.lineWidth = 3;
+          const scoreText = `SCORE: ${score}`;
+          this.ctx.strokeText(scoreText, 20, 40);
+          this.ctx.fillText(scoreText, 20, 40);
+          this.ctx.restore();
+        }
+
+        drawTitle() {
+          this.ctx.save();
+          this.ctx.font = "bold 28px Arial";
+          this.ctx.fillStyle = this.config.colors.text;
+          this.ctx.strokeStyle = this.config.colors.textStroke;
+          this.ctx.lineWidth = 3;
+          const title = "MEGASTAR RUSH";
+          const titleWidth = this.ctx.measureText(title).width;
+          this.ctx.strokeText(
+            title,
+            this.config.canvas.width - titleWidth - 20,
+            40
+          );
+          this.ctx.fillText(
+            title,
+            this.config.canvas.width - titleWidth - 20,
+            40
+          );
+          this.ctx.restore();
+        }
+
+        drawStartScreen(isTouchDevice = false) {
+          this.clear();
+          this.ctx.save();
+          this.ctx.font = "bold 48px Arial";
+          this.ctx.fillStyle = this.config.colors.text;
+          this.ctx.strokeStyle = this.config.colors.textStroke;
+          this.ctx.lineWidth = 4;
+          const title = "MEGASTAR RUSH";
+          const titleWidth = this.ctx.measureText(title).width;
+          this.ctx.strokeText(
+            title,
+            this.config.canvas.width / 2 - titleWidth / 2,
+            150
+          );
+          this.ctx.fillText(
+            title,
+            this.config.canvas.width / 2 - titleWidth / 2,
+            150
+          );
+
+          this.ctx.font = "bold 24px Arial";
+          const subtitle = isTouchDevice
+            ? "Tap to Start"
+            : "Press SPACEBAR to Start";
+          const subtitleWidth = this.ctx.measureText(subtitle).width;
+          this.ctx.strokeText(
+            subtitle,
+            this.config.canvas.width / 2 - subtitleWidth / 2,
+            250
+          );
+          this.ctx.fillText(
+            subtitle,
+            this.config.canvas.width / 2 - subtitleWidth / 2,
+            250
+          );
+          this.ctx.restore();
+        }
+      }
+
+      class InputManager {
+        constructor() {
+          this.spacePressed = false;
+          this.isTouchDevice = this.detectTouchDevice();
+          this.listeners = {
+            jump: [],
+            start: [],
+          };
+          this.jumpButton = document.getElementById("jumpButton");
+          this.instructionsEl = document.getElementById("instructions");
+          this.setupEventListeners();
+          this.setupTouchUI();
+        }
+
+        detectTouchDevice() {
+          return (
+            "ontouchstart" in window ||
+            navigator.maxTouchPoints > 0 ||
+            navigator.msMaxTouchPoints > 0
+          );
+        }
+
+        setupTouchUI() {
+          if (this.isTouchDevice) {
+            this.jumpButton.classList.add("visible");
+            this.instructionsEl.textContent =
+              "Tap JUMP button to jump! Avoid the Dummies!";
+          }
+        }
+
+        setupEventListeners() {
+          // Keyboard events
+          document.addEventListener("keydown", (e) => this.handleKeyDown(e));
+          document.addEventListener("keyup", (e) => this.handleKeyUp(e));
+
+          // Touch events for jump button
+          this.jumpButton.addEventListener("touchstart", (e) =>
+            this.handleTouchStart(e)
+          );
+          this.jumpButton.addEventListener("touchend", (e) =>
+            this.handleTouchEnd(e)
+          );
+
+          // Also handle click for hybrid devices
+          this.jumpButton.addEventListener("click", (e) =>
+            this.handleJumpClick(e)
+          );
+
+          // Canvas touch to start game
+          const canvas = document.getElementById("gameCanvas");
+          canvas.addEventListener("touchstart", (e) =>
+            this.handleCanvasTouch(e)
+          );
+          canvas.addEventListener("click", (e) => this.handleCanvasClick(e));
+        }
+
+        handleKeyDown(e) {
+          if (e.code === "Space" && !this.spacePressed) {
+            e.preventDefault();
+            this.spacePressed = true;
+            this.emit("jump");
+            this.emit("start");
+          }
+        }
+
+        handleKeyUp(e) {
+          if (e.code === "Space") {
+            this.spacePressed = false;
+          }
+        }
+
+        handleTouchStart(e) {
+          e.preventDefault();
+          this.emit("jump");
+          this.emit("start");
+        }
+
+        handleTouchEnd(e) {
+          e.preventDefault();
+        }
+
+        handleJumpClick(e) {
+          // Fallback for non-touch click on jump button
+          if (!this.isTouchDevice) {
+            this.emit("jump");
+            this.emit("start");
+          }
+        }
+
+        handleCanvasTouch(e) {
+          e.preventDefault();
+          this.emit("start");
+        }
+
+        handleCanvasClick(e) {
+          this.emit("start");
+        }
+
+        on(event, callback) {
+          if (this.listeners[event]) {
+            this.listeners[event].push(callback);
+          }
+        }
+
+        off(event, callback) {
+          if (this.listeners[event]) {
+            this.listeners[event] = this.listeners[event].filter(
+              (cb) => cb !== callback
+            );
+          }
+        }
+
+        emit(event) {
+          if (this.listeners[event]) {
+            this.listeners[event].forEach((callback) => callback());
+          }
+        }
+
+        isTouchEnabled() {
+          return this.isTouchDevice;
+        }
+      }
+
+      class Game {
+        constructor(canvas, config, sprites) {
+          this.canvas = canvas;
+          this.ctx = canvas.getContext("2d");
+          this.config = config;
+          this.running = false;
+
+          this.player = new Player(config.player, sprites);
+          this.obstacleManager = new ObstacleManager(config.obstacle);
+          this.scoreManager = new ScoreManager(config.score.updateInterval);
+          this.renderer = new Renderer(this.ctx, config);
+          this.inputManager = new InputManager();
+
+          this.setupInputHandlers();
+          this.setupUI();
+        }
+
+        setupInputHandlers() {
+          this.inputManager.on("jump", () => {
+            if (this.running) {
+              this.player.jump();
+            }
+          });
+
+          const startHandler = () => {
+            if (!this.running) {
+              this.start();
+              this.inputManager.off("start", startHandler);
+            }
+          };
+          this.inputManager.on("start", startHandler);
+        }
+
+        setupUI() {
+          this.gameOverDiv = document.getElementById("gameOver");
+          this.finalScoreSpan = document.getElementById("finalScore");
+          const restartBtn = document.getElementById("restartBtn");
+          restartBtn.addEventListener("click", () => this.restart());
+        }
+
+        start() {
+          this.running = true;
+          this.scoreManager.reset();
+          this.loop();
+        }
+
+        restart() {
+          this.reset();
+          this.gameOverDiv.classList.remove("show");
+          this.start();
+
+          const startHandler = () => {
+            if (!this.running) {
+              this.start();
+              this.inputManager.off("start", startHandler);
+            }
+          };
+          this.inputManager.on("start", startHandler);
+        }
+
+        reset() {
+          this.player.reset();
+          this.obstacleManager.reset();
+          this.scoreManager.reset();
+        }
+
+        update() {
+          this.player.update();
+          this.obstacleManager.update();
+          this.scoreManager.update();
+
+          if (
+            CollisionDetector.checkPlayerObstacleCollision(
+              this.player,
+              this.obstacleManager.getObstacles()
+            )
+          ) {
+            this.gameOver();
+          }
+        }
+
+        render() {
+          this.renderer.clear();
+          this.renderer.drawGround();
+          this.renderer.drawPlayer(this.player);
+          this.renderer.drawObstacles(this.obstacleManager.getObstacles());
+          this.renderer.drawScore(this.scoreManager.getScore());
+          this.renderer.drawTitle();
+        }
+
+        loop() {
+          if (!this.running) return;
+          this.update();
+          this.render();
+          requestAnimationFrame(() => this.loop());
+        }
+
+        gameOver() {
+          this.running = false;
+          this.finalScoreSpan.textContent = this.scoreManager.getScore();
+          this.gameOverDiv.classList.add("show");
+        }
+
+        showStartScreen() {
+          this.renderer.drawStartScreen(this.inputManager.isTouchEnabled());
+        }
+      }
+
+      // ===== GAME INITIALIZATION =====
+      const canvas = document.getElementById("gameCanvas");
+      const ctx = canvas.getContext("2d");
+
+      // Show loading screen
+      ctx.fillStyle = CONFIG.colors.background;
+      ctx.fillRect(0, 0, CONFIG.canvas.width, CONFIG.canvas.height);
+      ctx.save();
+      ctx.font = "bold 32px Arial";
+      ctx.fillStyle = CONFIG.colors.text;
+      ctx.textAlign = "center";
+      ctx.fillText(
+        "Loading...",
+        CONFIG.canvas.width / 2,
+        CONFIG.canvas.height / 2
+      );
+      ctx.restore();
+
+      // Load sprites and initialize game
+      const spriteLoader = new SpriteLoader(CONFIG.sprites.paths);
+      spriteLoader
+        .waitForLoad()
+        .then(() => {
+          const game = new Game(canvas, CONFIG, spriteLoader.getSprites());
+          game.showStartScreen();
+        })
+        .catch((error) => {
+          console.error("Failed to load sprites:", error);
+          ctx.fillStyle = CONFIG.colors.background;
+          ctx.fillRect(0, 0, CONFIG.canvas.width, CONFIG.canvas.height);
+          ctx.save();
+          ctx.font = "bold 24px Arial";
+          ctx.fillStyle = "#FF0000";
+          ctx.textAlign = "center";
+          ctx.fillText(
+            "Failed to load game assets",
+            CONFIG.canvas.width / 2,
+            CONFIG.canvas.height / 2
+          );
+          ctx.restore();
+        });
+    </script>
+  </body>
+</html>
